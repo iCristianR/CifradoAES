@@ -1,7 +1,7 @@
 import base64
 
 # Tabla sbox directa
-sbox_direct = (
+sbox = (
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
     0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
     0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
@@ -33,7 +33,7 @@ def key_expansion(key):
             # Rotación de palabra y sustitución byte
             temp = [temp[1], temp[2], temp[3], temp[0]]
             for j in range(4):
-                temp[j] = sbox_direct[temp[j]] # Sustitución byte usando la tabla sbox
+                temp[j] = sbox[temp[j]] # Sustitución byte usando la tabla sbox
             temp[0] ^= rcon[i // 4 - 1] # Aplicar rcon a la primera palabra
 
         for j in range(4):
@@ -47,7 +47,7 @@ def add_round_key(state, round_key):
 
 def sub_bytes(state):
     # Sustituye cada byte del estado por su valor en la tabla sbox
-    return [sbox_direct[byte] for byte in state]
+    return [sbox[byte] for byte in state]
 
 def shift_rows(state):
     # Reorganiza las filas del estado
@@ -101,7 +101,7 @@ def mix_columns(state):
 
 def aes_encrypt(plaintext, key):
     state = bytearray(plaintext.encode('utf-8'))
-    key_b = bytearray(key.encode('utf-8'))[:16]   # Clave de 128 bits
+    key_b = bytearray(key.encode('utf-8'))[:16] # Clave de 128 bits
     
     # Generar las subclaves
     round_keys = key_expansion(key_b)
