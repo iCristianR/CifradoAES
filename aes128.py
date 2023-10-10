@@ -1,6 +1,7 @@
-# Tabla S-Box para SubBytes
-#
-sbox = (
+import base64
+
+# Tabla sbox directa
+sbox_direct = (
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
     0xca, 0x82, 0xc9, 0x7d, 0xfa, 0x59, 0x47, 0xf0, 0xad, 0xd4, 0xa2, 0xaf, 0x9c, 0xa4, 0x72, 0xc0,
     0xb7, 0xfd, 0x93, 0x26, 0x36, 0x3f, 0xf7, 0xcc, 0x34, 0xa5, 0xe5, 0xf1, 0x71, 0xd8, 0x31, 0x15,
@@ -19,94 +20,121 @@ sbox = (
     0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
 )
 
-# Rcon para la expansión de claves
-rcon = (
-    0x01, 0x00, 0x00, 0x00,
-    0x02, 0x00, 0x00, 0x00,
-    0x04, 0x00, 0x00, 0x00,
-    0x08, 0x00, 0x00, 0x00,
-    0x10, 0x00, 0x00, 0x00,
-    0x20, 0x00, 0x00, 0x00,
-    0x40, 0x00, 0x00, 0x00,
-    0x80, 0x00, 0x00, 0x00,
-    0x1b, 0x00, 0x00, 0x00,
-    0x36, 0x00, 0x00, 0x00
-)
-
-# Función para agregar RoundKey
-def add_round_key(state, round_key):
-    return bytes(a ^ b for a, b in zip(state, round_key))
-
-# Función para SubBytes
-def sub_bytes(state):
-    return bytes([sbox[b] for b in state])
-
-# Función para ShiftRows
-def shift_rows(state):
-    return bytes([
-        state[0], state[5], state[10], state[15],
-        state[4], state[9], state[14], state[3],
-        state[8], state[13], state[2], state[7],
-        state[12], state[1], state[6], state[11]
-    ])
-
-# Función para MixColumns
-def mix_columns(state):
-    result = bytearray(16)
-    for i in range(4):
-        s0, s1, s2, s3 = state[i * 4:i * 4 + 4]
-        result[i] = (0x02 * s0) ^ (0x03 * s1) ^ s2 ^ s3
-        result[i + 4] = s0 ^ (0x02 * s1) ^ (0x03 * s2) ^ s3
-        result[i + 8] = s0 ^ s1 ^ (0x02 * s2) ^ (0x03 * s3)
-        result[i + 12] = (0x03 * s0) ^ s1 ^ s2 ^ (0x02 * s3)
-    return bytes(result)
-
 def key_expansion(key):
-    round_keys = [key[i:i + 4] for i in range(0, len(key), 4)]
+    rcon = (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36)
+    round_keys = list(key)
+    
+    # Llena la lista de subclaves
     for i in range(4, 44):
-        temp = round_keys[i - 1]
-        if i % 4 == 0:
-            # rotar ultima columna una posicion y buscar valor dela caja s con la primera posicion
-            temp = [sbox[b] for b in temp[1:]] + [sbox[temp[0]]]
-            # xor
-            temp[0] ^= rcon[i // 4 - 1]
-        round_keys.append([a ^ b for a, b in zip(round_keys[i - 4], temp)])
-    flattened_keys = [byte for sublist in round_keys for byte in sublist]  # Desenrollar la lista de listas
-    return bytes(flattened_keys)
+        # ultima subclave
+        temp = round_keys[(i - 1) * 4:i * 4]
 
-# Función principal para cifrar
+        if i % 4 == 0:
+            # Rotación de palabra y sustitución byte
+            temp = [temp[1], temp[2], temp[3], temp[0]]
+            for j in range(4):
+                temp[j] = sbox_direct[temp[j]] # Sustitución byte usando la tabla sbox
+            temp[0] ^= rcon[i // 4 - 1] # Aplicar rcon a la primera palabra
+
+        for j in range(4):
+            round_keys.extend([round_keys[(i - 4) * 4 + j] ^ temp[j]])
+
+    return round_keys
+
+def add_round_key(state, round_key):
+    # Operación XOR entre el estado y la clave de ronda
+    return [state[i] ^ round_key[i] for i in range(16)]
+
+def sub_bytes(state):
+    # Sustituye cada byte del estado por su valor en la tabla sbox
+    return [sbox_direct[byte] for byte in state]
+
+def shift_rows(state):
+    # Reorganiza las filas del estado
+    shift_rows_table = [
+        [0, 4, 8, 12],
+        [1, 5, 9, 13],
+        [2, 6, 10, 14],
+        [3, 7, 11, 15]
+    ]
+    # matriz  de 16 elementos vacia
+    new_state = [0] * 16
+
+    for row in range(4):
+        for col in range(4):
+            new_state[row * 4 + col] = state[shift_rows_table[row][col]]
+
+    return new_state
+
+def gf_mult(a, b):
+    # Multiplicación en el campo Galois (GF(2^8))
+    result = 0
+    for _ in range(8):
+        if b & 1:
+            result ^= a
+        a <<= 1
+        if a & 0x100:
+            a ^= 0x11B  # Polinomio irreducible AES
+        b >>= 1
+    return result
+
+def mix_columns(state):
+    # Mezcla los bytes dentro de cada columna del estado
+    mix_columns_table = [
+        [0x02, 0x03, 0x01, 0x01],
+        [0x01, 0x02, 0x03, 0x01],
+        [0x01, 0x01, 0x02, 0x03],
+        [0x03, 0x01, 0x01, 0x02]
+    ]
+    # matriz  de 16 elementos vacia
+    new_state = [0] * 16
+    
+    for col in range(4):
+        for row in range(4):
+            val = 0
+            for i in range(4):
+                # Multiplicación en el campo Galois y XOR
+                val ^= gf_mult(mix_columns_table[row][i], state[col * 4 + i])
+            new_state[col * 4 + row] = val
+            
+    return new_state
+
 def aes_encrypt(plaintext, key):
     state = bytearray(plaintext.encode('utf-8'))
-    key_b = bytearray(key.encode('utf-8'))  # Clave de 128 bits
+    key_b = bytearray(key.encode('utf-8'))[:16]   # Clave de 128 bits
+    
+    # Generar las subclaves
     round_keys = key_expansion(key_b)
-    print(type(round_keys))
+    
     # Ronda inicial
-    state = add_round_key(state, round_keys[0])
-
+    state = add_round_key(state, round_keys[:16])
+    
     # 9 rondas principales
     for i in range(1, 10):
         state = sub_bytes(state)
         state = shift_rows(state)
         state = mix_columns(state)
-        state = add_round_key(state, round_keys[i])
+        state = add_round_key(state, round_keys[i * 16:(i + 1) * 16])
 
-    # Ronda final sin MixColumns
+    # Ronda final
     state = sub_bytes(state)
     state = shift_rows(state)
-    state = add_round_key(state, round_keys[10])
+    state = add_round_key(state, round_keys[10 * 16:])
 
     return state
-
-# Función para imprimir el estado en formato hexadecimal
-def print_state(state):
-    for i in range(0, 16, 4):
-        print(' '.join(f'{state[i + j]:02x}' for j in range(4)))
+        
+def bytes_to_hex_string(state):
+    # Imprimir el estado en formato hexadecimal
+    return ''.join(format(byte, '02x') for byte in state)
 
 if __name__ == "__main__":
-    plaintext = "Hola, esto es un mensaje de prueba"
-    key = "ClaveSecreta1234"
+    plaintext = "Mensaje Prueba16"
+    key = "ClaveSecreta128b"
 
     ciphertext = aes_encrypt(plaintext, key)
-
-    print("Texto cifrado en formato hexadecimal:")
-    print_state(ciphertext)
+    
+    ciphertext_hex = bytes_to_hex_string(ciphertext)
+    print("Ciphertext hex:", ciphertext_hex)
+    
+    base64_encoded = base64.b64encode(bytes.fromhex(ciphertext_hex)).decode('utf-8')
+    print("Ciphertext base64:", base64_encoded)
