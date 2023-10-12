@@ -166,39 +166,8 @@ def inv_mix_columns(state):
 
     return new_state
 
-def aes_decrypt(ciphertext, key):
-    state = list(ciphertext)
-    key_b = bytearray(key.encode('utf-8'))[:16]  # Clave de 128 bits
-
-    # Generar las subclaves
-    round_keys = key_expansion(key_b)
-
-    # Ronda inicial
-    state = add_round_key(state, round_keys[10 * 16:])
-    
-    # 9 rondas principales (en orden inverso)
-    for i in range(9, 0, -1):
-        state = inv_shift_rows(state)
-        state = inv_sub_bytes(state)
-        state = add_round_key(state, round_keys[i * 16:(i + 1) * 16])
-        state = inv_mix_columns(state)
-    
-    # Ronda final
-    state = inv_shift_rows(state)
-    state = inv_sub_bytes(state)
-    state = add_round_key(state, round_keys[:16])
-
-    return state
-
-def aes_encrypt(plaintext, key):
+def aes_encrypt(plaintext, round_keys):
     state = bytearray(plaintext.encode('utf-8'))
-    key_b = bytearray(key.encode('utf-8'))[:16] # Clave de 128 bits
-    
-    # Generar las subclaves
-    round_keys = key_expansion(key_b)
-    print("Expansion de llaves:")
-    for i in range(11):
-        print(f"{i}: | {bytes_to_hex_string(round_keys[i * 16:(i + 1) * 16])}")
     
     # Ronda inicial
     print("\nRonda 0:")
@@ -228,6 +197,38 @@ def aes_encrypt(plaintext, key):
     print("Después de AddRoundKey:", bytes_to_hex_string(state))
 
     return state
+
+def aes_decrypt(ciphertext, round_keys):
+    state = list(ciphertext)
+
+    # Ronda inicial
+    print("\nRonda 0:")
+    print("Estado inicial:", bytes_to_hex_string(state))
+    state = add_round_key(state, round_keys[10 * 16:])
+    print("Después de AddRoundKey:", bytes_to_hex_string(state))
+    
+    # 9 rondas principales (en orden inverso)
+    for i in range(9, 0, -1):
+        print(f"\nRonda {i}:")
+        state = inv_shift_rows(state)
+        print("Después de InvShiftRows:", bytes_to_hex_string(state))
+        state = inv_sub_bytes(state)
+        print("Después de InvSubBytes:", bytes_to_hex_string(state))
+        state = add_round_key(state, round_keys[i * 16:(i + 1) * 16])
+        print("Después de AddRoundKey:", bytes_to_hex_string(state))
+        state = inv_mix_columns(state)
+        print("Después de InvMixColumns:", bytes_to_hex_string(state))
+    
+    # Ronda final
+    print("\nRonda 10:")
+    state = inv_shift_rows(state)
+    print("Después de InvShiftRows:", bytes_to_hex_string(state))
+    state = inv_sub_bytes(state)
+    print("Después de InvSubBytes:", bytes_to_hex_string(state))
+    state = add_round_key(state, round_keys[:16])
+    print("Después de AddRoundKey:", bytes_to_hex_string(state))
+
+    return state
         
 def bytes_to_hex_string(state):
     # Imprimir el estado en formato hexadecimal
@@ -236,18 +237,22 @@ def bytes_to_hex_string(state):
 if __name__ == "__main__":
     plaintext = "Mensaje Prueba16"
     key = "ClaveSecreta128b"
-
-    # Cifrado
-    cipher_state = aes_encrypt(plaintext, key)
     
-    print("\nCifrado:")
+    key_b = bytearray(key.encode('utf-8'))[:16] # Clave de 128 bits
+    
+    # Generar las subclaves
+    print("\n///--- Expansion de llaves: ---///\n")
+    round_keys = key_expansion(key_b)
+    for i in range(11):
+        print(f"{i}: | {bytes_to_hex_string(round_keys[i * 16:(i + 1) * 16])}")
+
+    print("\n///--- Cifrado ---///")
+    cipher_state = aes_encrypt(plaintext, round_keys)
     ciphertext_hex = bytes_to_hex_string(cipher_state)
     ciphertext_base64 = base64.b64encode(bytes.fromhex(ciphertext_hex)).decode('utf-8')
-    print("Text Cifrado:", ciphertext_base64)
+    print("\nTexto cifrado:", ciphertext_base64)
     
-    # Descifrado
-    decipher_state = aes_decrypt(cipher_state, key)
+    print("\n///--- Descifrado ---///")
+    decipher_state = aes_decrypt(cipher_state, round_keys)
     decipher_text = bytearray(decipher_state).decode('utf-8')
-    
-    print("\nDescifrado:")
-    print("Texto descifrado:", decipher_text)
+    print("\nTexto descifrado:", decipher_text)
