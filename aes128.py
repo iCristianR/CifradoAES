@@ -197,6 +197,7 @@ def aes_encrypt(plaintext, round_keys):
     print("Después de SubBytes:", bytes_to_hex_string(state))
     state = shift_rows(state)
     print("Después de ShiftRows:", bytes_to_hex_string(state))
+    print(round_keys)
     state = add_round_key(state, round_keys[10 * 16:])
     print("Después de AddRoundKey:", bytes_to_hex_string(state))
 
@@ -212,8 +213,9 @@ def aes_decrypt(ciphertext, round_keys):
     print("Después de AddRoundKey:", bytes_to_hex_string(state))
     
     # 9 rondas principales (en orden inverso)
+    cont = 1
     for i in range(9, 0, -1):
-        print(f"\nRonda {i}:")
+        print(f"\nRonda {cont}:")
         state = inv_shift_rows(state)
         print("Después de InvShiftRows:", bytes_to_hex_string(state))
         state = inv_sub_bytes(state)
@@ -222,6 +224,7 @@ def aes_decrypt(ciphertext, round_keys):
         print("Después de AddRoundKey:", bytes_to_hex_string(state))
         state = inv_mix_columns(state)
         print("Después de InvMixColumns:", bytes_to_hex_string(state))
+        cont += 1
     
     # Ronda final
     print("\nRonda 10:")
