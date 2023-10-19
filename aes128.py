@@ -44,19 +44,19 @@ sbox_inv = (
 def key_expansion(key):
     # Valores de la constante de ronda
     rcon = (0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36)
-    round_keys = list(key)
 
+    # Convertir el arreglo de hexadecimales a una lista de bytes
+    round_keys = [int(b, 16) for b in key]
+    
     # Llena la lista de subclaves
     for i in range(4, 44):
-        # ultima subclave
+        # Última subclave
         temp = round_keys[(i - 1) * 4:i * 4]
 
         if i % 4 == 0:
-            # Rotación de palabra y sustitución byte
-            temp = [temp[1], temp[2], temp[3], temp[0]]
-            for j in range(4):
-                temp[j] = sbox[temp[j]] # Sustitución byte usando la tabla sbox
-            temp[0] ^= rcon[i // 4 - 1] # Aplicar rcon a la primera palabra
+            # Rotar palabra y aplicar S-box a todos los bytes
+            temp = [sbox[b] for b in [temp[1], temp[2], temp[3], temp[0]]]
+            temp[0] ^= rcon[i // 4 - 1]
 
         for j in range(4):
             # Genera una nueva subclave a partir de la anterior
@@ -170,8 +170,9 @@ def inv_mix_columns(state):
 
     return new_state
 
-def aes_encrypt(plaintext, round_keys):
-    state = bytearray(plaintext.encode('utf-8'))
+def aes_encrypt(state, round_keys):
+    # Convertir el arreglo de hexadecimales a una lista de bytes
+    state = [int(b, 16) for b in state]
     
     # Ronda inicial
     print("\nRonda 0:")
@@ -197,7 +198,6 @@ def aes_encrypt(plaintext, round_keys):
     print("Después de SubBytes:", bytes_to_hex_string(state))
     state = shift_rows(state)
     print("Después de ShiftRows:", bytes_to_hex_string(state))
-    print(round_keys)
     state = add_round_key(state, round_keys[10 * 16:])
     print("Después de AddRoundKey:", bytes_to_hex_string(state))
 
@@ -241,25 +241,39 @@ def bytes_to_hex_string(state):
     # Imprimir el estado en formato hexadecimal
     return ''.join(format(byte, '02x') for byte in state)
 
+def pkcs7_pad(data, block_size):
+    # Aplica el esquema de relleno PKCS7 a un bloque de datos para ajustar su longitud al tamaño de bloque deseado
+    # El valor del byte sera la longitud de datos que faltan para ajustar
+    data_length = len(data)
+    if data_length % block_size == 0:
+        return data  # No aplicar relleno si el bloque ya está completo
+    
+    padding_length = block_size - (data_length % block_size)
+    padding = bytes([padding_length] * padding_length)
+
+    return data + padding
+
 if __name__ == "__main__":
-    plaintext = "Mensaje Prueba16"
-    key = "ClaveSecreta128b"
-    
-    key_b = bytearray(key.encode('utf-8'))[:16] # Clave de 128 bits
-    
-    # Generar las subclaves
+    plaintext = "Hola mundo!"
+    key = "SecretkeyAes128$"
+
+    ba_text = pkcs7_pad(bytearray(plaintext.encode('utf-8')), 16)
+    ba_key = pkcs7_pad(bytearray(key.encode('utf-8')), 16)
+
+    list_hex_text = [hex(byte) for byte in ba_text]
+    list_hex_key = [hex(byte) for byte in ba_key]
+
     print("\n///--- Expansion de llaves: ---///\n")
-    round_keys = key_expansion(key_b)
+    round_keys = key_expansion(list_hex_key)
     for i in range(11):
         print(f"{i}: | {bytes_to_hex_string(round_keys[i * 16:(i + 1) * 16])}")
 
     print("\n///--- Cifrado ---///")
-    cipher_state = aes_encrypt(plaintext, round_keys)
-    ciphertext_hex = bytes_to_hex_string(cipher_state)
-    ciphertext_base64 = base64.b64encode(bytes.fromhex(ciphertext_hex)).decode('utf-8')
-    print("\nTexto cifrado:", ciphertext_base64)
+    cipher_bytes = aes_encrypt(list_hex_text, round_keys)
+    cipher_base64 = base64.b64encode(bytes(cipher_bytes)).decode('utf-8')
+    print("\nTexto cifrado:", cipher_base64)
     
     print("\n///--- Descifrado ---///")
-    decipher_state = aes_decrypt(cipher_state, round_keys)
-    decipher_text = bytearray(decipher_state).decode('utf-8')
+    decipher_bytes = aes_decrypt(cipher_bytes, round_keys)
+    decipher_text = bytearray(decipher_bytes).decode('utf-8')
     print("\nTexto descifrado:", decipher_text)
